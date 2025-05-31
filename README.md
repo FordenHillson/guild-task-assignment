@@ -1,6 +1,8 @@
 
 # Guild Task Assignment Tool
 
+![1748717414033](image/README/1748717414033.png)
+
 A web app for assigning guild members to each Tier with automatic GP calculation, built with React + Vite + TailwindCSS.
 
 ## Features
