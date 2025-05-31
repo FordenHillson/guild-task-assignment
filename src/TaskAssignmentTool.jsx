@@ -546,7 +546,7 @@ const TaskAssignmentTool = () => {
                         </div>
                         <button
                             onClick={() => exportAssignments(members, assignments, tierConfig)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4"
+                            className="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4 mt-4"
                         >
                             <FileText size={16} />
                             Export Assignment Report
