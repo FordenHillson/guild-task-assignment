@@ -6,8 +6,9 @@ return (
         <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl font-bold mb-6">About Me</h1>
             
-            <div className="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg">                <img 
-                    src="./image/0.png" 
+            <div className="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg">
+                <img 
+                    src="/static/images/0.png" 
                     alt="Profile" 
                     className="mx-auto mb-4 p-2 w-32 h-32 rounded-full bg-gray-700 object-cover"
                 />
@@ -37,7 +38,8 @@ return (
                 <h2 className="text-2xl font-semibold mb-4">Contact</h2>
                 <p className="mb-4">
                     If you have any questions, feedback, or suggestions for improving this tool, feel free to reach out:
-                </p>                <ul className="space-y-2 text-gray-300 mb-6">
+                </p>
+                <ul className="space-y-2 text-gray-300 mb-6">
                     <li className="flex items-center gap-2">
                         <span className="text-blue-400">📧</span> Email: peerasakt1@gmail.com
                     </li>
