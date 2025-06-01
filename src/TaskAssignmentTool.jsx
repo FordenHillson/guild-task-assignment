@@ -2,6 +2,8 @@ import React, { useState, useCallback, useRef } from 'react';
 import { Users, Target, TrendingUp, Activity, AlertCircle, Upload, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import Papa from 'papaparse';
 
+
+
 const assignAuto = (members, tierConfig, setAssignments) => {
     let assignments = {};
     let assignedMemberIds = new Set();
@@ -135,7 +137,10 @@ const TaskAssignmentTool = () => {
     const [selectedTier, setSelectedTier] = useState(null);
     const [selectedMember, setSelectedMember] = useState(null);
     const [collapsedTiers, setCollapsedTiers] = useState({});
+    const [editingMember, setEditingMember] = useState(null); // { tierId, member }
+    const [selectedMembers, setSelectedMembers] = useState([]);
     const fileInputRef = useRef(null);
+    
 
     // Calculate current GP for a tier
     const calculateTierGP = (tierId) => {
@@ -488,6 +493,12 @@ const TaskAssignmentTool = () => {
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-sm text-purple-400">{gpUsed.toLocaleString()} GP</span>
                                                                     <button
+                                                                        onClick={() => setEditingMember({ tierId, member })}
+                                                                        className="text-yellow-400 hover:text-yellow-300 text-sm"
+                                                                    >
+                                                                        ✎
+                                                                    </button>
+                                                                    <button
                                                                         onClick={() => removeAssignment(tierId, memberId)}
                                                                         className="text-red-400 hover:text-red-300 text-sm"
                                                                     >
@@ -610,8 +621,67 @@ const TaskAssignmentTool = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Edit Enhancement Modal */}
+                {editingMember && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 max-w-md w-full mx-4">
+                            <h3 className="text-xl font-semibold mb-4">
+                                Edit Enhancement for {editingMember.member.name} (Tier {editingMember.tierId})
+                            </h3>
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium mb-2">
+                                    Enhancement Count:
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[0, 1, 2, 3, 4, 5].map(count => {
+                                        const libGP = tierConfig[editingMember.tierId].liberation;
+                                        const enhGP = count * tierConfig[editingMember.tierId].enhancement;
+                                        const totalGP = libGP + enhGP;
+                                        return (
+                                            <button
+                                                key={count}
+                                                onClick={() => {
+                                                    setAssignments(prev => ({
+                                                        ...prev,
+                                                        [editingMember.tierId]: {
+                                                            ...prev[editingMember.tierId],
+                                                            [editingMember.member.id]: {
+                                                                ...prev[editingMember.tierId][editingMember.member.id],
+                                                                enhancement: count
+                                                            }
+                                                        }
+                                                    }));
+                                                    setEditingMember(null);
+                                                }}
+                                                className="bg-yellow-600 hover:bg-yellow-700 p-3 rounded text-center transition-colors"
+                                            >
+                                                <div className="font-semibold text-lg mb-1">{count}</div>
+                                                <div className="text-xs space-y-1">
+                                                    <div className="text-yellow-200">Lib: {libGP.toLocaleString()}</div>
+                                                    <div className="text-yellow-200">Enh: {enhGP.toLocaleString()}</div>
+                                                    <div className="text-white font-semibold border-t border-yellow-500 pt-1">
+                                                        Total: {totalGP.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setEditingMember(null)}
+                                className="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
+
+
     );
 };
 
