@@ -6,60 +6,118 @@ import Papa from 'papaparse';
 
 const assignAuto = (members, tierConfig, setAssignments) => {
     let assignments = {};
-    let assignedMemberIds = new Set();
-    let memberOrder = [...members]; // clone
+    let memberGpUsage = {};
+    members.forEach(member => memberGpUsage[member.id] = 0);
 
     // จัดลำดับ tier ตาม maxGP จากมากไปน้อย (จะได้เติมที่ว่างเยอะก่อน)
     const tierEntries = Object.entries(tierConfig).sort((a, b) => b[1].maxGP - a[1].maxGP);
 
-    // วน assign จนกว่าสมาชิกจะครบทุกคน
-    for (let round = 0; round < memberOrder.length; round++) {
-        for (let t = 0; t < tierEntries.length; t++) {
-            const [tierId, config] = tierEntries[t];
-            if (!assignments[tierId]) assignments[tierId] = {};
-            // หา member ที่ยังไม่ได้ assign
-            const member = memberOrder[round];
-            if (!member || assignedMemberIds.has(member.id)) continue;
+    // เก็บข้อมูลว่า tier ไหนอนุญาติให้ overflow ได้อีก 1 ครั้ง
+    let tierOverflowAllowed = {};
+    tierEntries.forEach(([tierId]) => tierOverflowAllowed[tierId] = true);
 
-            // enhancement สลับวน 1,2,3,...
-            const enhancementCount = Math.floor(Math.random() * 3) + 0;
-            const memberGP = config.liberation + (enhancementCount * config.enhancement);
+    // ในแต่ละ tier พยายาม assign สมาชิกให้ได้มากที่สุด
+    tierEntries.forEach(([tierId, config]) => {
+        if (!assignments[tierId]) assignments[tierId] = {};
 
-            // รวม GP ใน tier นี้
-            let currentGP = 0;
-            Object.values(assignments[tierId]).forEach(a => {
-                currentGP += (a.liberation * config.liberation) + (a.enhancement * config.enhancement);
-            });
-
-            if (currentGP + memberGP <= config.maxGP) {
-                assignments[tierId][member.id] = { liberation: 1, enhancement: enhancementCount };
-                assignedMemberIds.add(member.id);
-            }
-            // ถ้า assign ครบทุกคนแล้ว ให้ออกจากลูป
-            if (assignedMemberIds.size === members.length) break;
-        }
-        if (assignedMemberIds.size === members.length) break;
-    }
-
-    // กรณี tier ยังเหลือ GP เติมต่อ (ใครจะได้หลาย tier ก็ได้)
-    for (let t = 0; t < tierEntries.length; t++) {
-        const [tierId, config] = tierEntries[t];
+        // คำนวณ GP ที่ใช้ไปในแต่ละ tier
         let currentGP = 0;
-        Object.values(assignments[tierId] || {}).forEach(a => {
-            currentGP += (a.liberation * config.liberation) + (a.enhancement * config.enhancement);
-        });
-        let enhLoop = 1;
-        for (let m = 0; m < members.length; m++) {
-            const member = members[m];
-            if (assignments[tierId] && assignments[tierId][member.id]) continue; // ข้ามคนที่ assign ไปแล้ว
-            const enhancementCount = enhLoop;
+
+        // เรียงลำดับสมาชิกตาม GP ที่ใช้ไปแล้วจากน้อยไปมาก
+        // เพื่อให้สมาชิกที่ยังไม่ได้ใช้งานมากได้รับการ assign ก่อน
+        const sortedMembers = [...members].sort((a, b) =>
+            (memberGpUsage[a.id] || 0) - (memberGpUsage[b.id] || 0)
+        );
+
+        // วน loop ผ่านสมาชิกทุกคน
+        for (const member of sortedMembers) {
+            // หา enhancement count ที่เหมาะสม (สุ่มระหว่าง 0-3)
+            const enhancementCount = Math.floor(Math.random() * 4);
             const memberGP = config.liberation + (enhancementCount * config.enhancement);
-            if (currentGP + memberGP > config.maxGP) break;
-            if (!assignments[tierId]) assignments[tierId] = {};
-            assignments[tierId][member.id] = { liberation: 1, enhancement: enhancementCount };
-            currentGP += memberGP;
-            enhLoop++;
-            if (enhLoop > 3) enhLoop = 1;
+
+            // ตรวจสอบว่า tier นี้ยังมีพื้นที่พอหรือไม่
+            // หรือถ้าใกล้เต็มแล้ว และยังไม่เคย overflow ก็อนุญาติให้ overflow ได้ 1 ครั้ง
+            const isNearlyFull = (config.maxGP - currentGP < config.liberation * 2); // ถือว่าใกล้เต็มถ้าเหลือน้อยกว่า liberation * 2
+
+            if (currentGP + memberGP <= config.maxGP ||
+                (isNearlyFull && tierOverflowAllowed[tierId] && currentGP > 0)) {
+
+                // ถ้าเป็นการ overflow ให้เปลี่ยนสถานะ
+                if (currentGP + memberGP > config.maxGP) {
+                    tierOverflowAllowed[tierId] = false;
+                }
+
+                assignments[tierId][member.id] = { liberation: 1, enhancement: enhancementCount };
+                currentGP += memberGP;
+                memberGpUsage[member.id] = (memberGpUsage[member.id] || 0) + memberGP;
+            }
+        }
+    });
+
+    // รอบที่ 2: พยายามเติม GP ที่เหลือในแต่ละ tier โดยให้สมาชิกสามารถรับได้หลาย tier
+    let remainingAssignmentsMade = true;
+    let maxRounds = 3; // ป้องกันการวนลูปไม่รู้จบ
+
+    while (remainingAssignmentsMade && maxRounds > 0) {
+        remainingAssignmentsMade = false;
+        maxRounds--;
+
+        // เรียงลำดับ tier ตาม GP ที่เหลืออยู่จากมากไปน้อย
+        const tiersWithCapacity = [...tierEntries]
+            .map(([tierId, config]) => {
+                const usedGP = Object.values(assignments[tierId] || {}).reduce((sum, a) =>
+                    sum + (a.liberation * config.liberation) + (a.enhancement * config.enhancement), 0);
+                return { tierId, config, remainingGP: config.maxGP - usedGP };
+            })
+            // ตัวกรองว่ามีที่เหลือหรือยังอนุญาติให้ overflow ได้อีก 1 ครั้ง
+            .filter(t => t.remainingGP > 0 || (tierOverflowAllowed[t.tierId] && t.remainingGP > -t.config.maxGP * 0.05))
+            .sort((a, b) => b.remainingGP - a.remainingGP);
+
+        // วนลูป tier ที่ยังมี capacity เหลือ
+        for (const { tierId, config, remainingGP } of tiersWithCapacity) {
+            // เรียงลำดับสมาชิกตาม GP ที่ใช้ไปแล้วจากน้อยไปมาก
+            const sortedMembers = [...members].sort((a, b) =>
+                (memberGpUsage[a.id] || 0) - (memberGpUsage[b.id] || 0)
+            );
+
+            // ลองกับสมาชิกทุกคน
+            for (const member of sortedMembers) {
+                // ถ้าสมาชิกมี assignment ใน tier นี้แล้ว ให้ข้ามไป
+                if (assignments[tierId] && assignments[tierId][member.id]) continue;
+
+                // ทดลองกับ enhancement ค่าต่างๆ
+                for (let enh = 0; enh <= 3; enh++) {
+                    const memberGP = config.liberation + (enh * config.enhancement);
+
+                    // อนุญาติให้ overflow ได้ถ้ายังไม่เคย overflow ใน tier นี้
+                    // และ tier มี assignments อยู่แล้ว (ไม่ว่าง)
+                    const canAssign = memberGP <= remainingGP ||
+                        (tierOverflowAllowed[tierId] &&
+                            Object.keys(assignments[tierId] || {}).length > 0 &&
+                            remainingGP > -config.maxGP * 0.05);
+
+                    if (canAssign) {
+                        if (!assignments[tierId]) assignments[tierId] = {};
+
+                        // ถ้าเป็นการ overflow ให้เปลี่ยนสถานะ
+                        if (memberGP > remainingGP) {
+                            tierOverflowAllowed[tierId] = false;
+                        }
+
+                        assignments[tierId][member.id] = { liberation: 1, enhancement: enh };
+                        memberGpUsage[member.id] = (memberGpUsage[member.id] || 0) + memberGP;
+                        remainingAssignmentsMade = true;
+                        break; // หยุด loop enhancement
+                    }
+                }
+
+                // ถ้า assign แล้วอาจจะเต็ม tier แล้ว ให้ไปต่อ tier ถัดไป
+                const updatedUsedGP = Object.values(assignments[tierId] || {}).reduce((sum, a) =>
+                    sum + (a.liberation * config.liberation) + (a.enhancement * config.enhancement), 0);
+                if (config.maxGP - updatedUsedGP < config.liberation && !tierOverflowAllowed[tierId]) {
+                    break; // หยุด loop member
+                }
+            }
         }
     }
 
@@ -138,9 +196,12 @@ const TaskAssignmentTool = () => {
     const [selectedMember, setSelectedMember] = useState(null);
     const [collapsedTiers, setCollapsedTiers] = useState({});
     const [editingMember, setEditingMember] = useState(null); // { tierId, member }
-    const [selectedMembers, setSelectedMembers] = useState([]);
     const fileInputRef = useRef(null);
-    
+
+    // Add state for multi-select functionality
+    const [selectedMembers, setSelectedMembers] = useState([]);
+    const [bulkAssignTier, setBulkAssignTier] = useState(null);
+    const [showBulkModal, setShowBulkModal] = useState(false);
 
     // Calculate current GP for a tier
     const calculateTierGP = (tierId) => {
@@ -176,6 +237,65 @@ const TaskAssignmentTool = () => {
         });
 
         return { totalGP, tasks: memberTasks };
+    };
+
+    // Toggle member selection for bulk assignment
+    const toggleMemberSelection = (member, e) => {
+        // If we're clicking on the checkbox directly, don't do anything
+        // as the onChange handler of the checkbox will handle it
+        if (e && e.target.type === 'checkbox') return;
+
+        setSelectedMembers(prev => {
+            const isSelected = prev.some(m => m.id === member.id);
+            if (isSelected) {
+                return prev.filter(m => m.id !== member.id);
+            } else {
+                return [...prev, member];
+            }
+        });
+    };
+
+    // Handle bulk assignment
+    const handleBulkAssign = (enhancementCount) => {
+        if (!bulkAssignTier || selectedMembers.length === 0) return;
+
+        const updatedAssignments = { ...assignments };
+        if (!updatedAssignments[bulkAssignTier]) {
+            updatedAssignments[bulkAssignTier] = {};
+        }
+
+        selectedMembers.forEach(member => {
+            updatedAssignments[bulkAssignTier][member.id] = {
+                liberation: 1,
+                enhancement: enhancementCount
+            };
+        });
+
+        setAssignments(updatedAssignments);
+        setBulkAssignTier(null);
+        setShowBulkModal(false);
+        setSelectedMembers([]);
+    };
+
+    // Start bulk assignment process
+    const startBulkAssignment = (tierId) => {
+        if (selectedMembers.length === 0) {
+            alert("Please select members first");
+            return;
+        }
+
+        setBulkAssignTier(tierId);
+        setShowBulkModal(true);
+    };
+
+    // Select all members
+    const selectAllMembers = () => {
+        setSelectedMembers([...members]);
+    };
+
+    // Deselect all members
+    const clearSelectedMembers = () => {
+        setSelectedMembers([]);
     };
 
     // Handle CSV upload
@@ -265,6 +385,31 @@ const TaskAssignmentTool = () => {
         });
     };
 
+    // Clear all assignments in a tier
+    const clearTierAssignments = (tierId) => {
+        if (window.confirm(`Are you sure you want to clear all assignments in Tier ${tierId}?`)) {
+            setAssignments(prev => {
+                const newAssignments = { ...prev };
+                delete newAssignments[tierId];
+                return newAssignments;
+            });
+        }
+    };
+
+    // Function to start auto assignment with confirmation
+    const startAutoAssignment = () => {
+        const confirmMessage =
+            "⚠️ Automatic Assignment Warning ⚠️\n\n" +
+            "- The system will randomly allocate Enhancements based on its algorithm\n" +
+            "- The distribution may not have balanced GP spending\n" +
+            "- Some members may be assigned to multiple Tiers\n\n" +
+            "Do you want to continue?";
+
+        if (window.confirm(confirmMessage)) {
+            assignAuto(members, tierConfig, setAssignments);
+        }
+    };
+
     // Toggle tier collapse
     const toggleTierCollapse = (tierId) => {
         setCollapsedTiers(prev => ({
@@ -328,6 +473,22 @@ const TaskAssignmentTool = () => {
                                 </button>
                             </div>
 
+                            {/* Bulk Selection Controls */}
+                            <div className="flex gap-2 mb-4">
+                                <button
+                                    onClick={selectAllMembers}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    onClick={clearSelectedMembers}
+                                    className="flex-1 bg-gray-600 hover:bg-gray-700 p-2 rounded text-sm font-medium transition-colors"
+                                    disabled={selectedMembers.length === 0}
+                                >
+                                    Clear Selection
+                                </button>
+                            </div>
                             <button
                                 onClick={generateSampleCSV}
                                 className="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4"
@@ -344,7 +505,7 @@ const TaskAssignmentTool = () => {
                                 className="hidden"
                             />
                             <button
-                                onClick={() => assignAuto(members, tierConfig, setAssignments)}
+                                onClick={startAutoAssignment}
                                 className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4"
                             >
                                 <TrendingUp size={16} />
@@ -361,15 +522,24 @@ const TaskAssignmentTool = () => {
                                 ) : (
                                     members.map(member => {
                                         const { totalGP } = calculateMemberGP(member.id);
+                                        const isSelected = selectedMembers.some(m => m.id === member.id);
                                         return (
                                             <div
                                                 key={member.id}
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, member)}
-                                                className="bg-gray-700 p-3 rounded cursor-move hover:bg-gray-600 transition-colors border border-gray-600"
+                                                onClick={(e) => toggleMemberSelection(member, e)}
+                                                className={`bg-gray-700 p-3 rounded cursor-pointer hover:bg-gray-600 transition-colors border ${isSelected ? 'border-purple-500' : 'border-gray-600'}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => toggleMemberSelection(member)}
+                                                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
                                                         <span className="text-2xl">{member.avatar}</span>
                                                         <span className="font-medium">{member.name}</span>
                                                     </div>
@@ -384,8 +554,13 @@ const TaskAssignmentTool = () => {
                                     })
                                 )}
                             </div>
+                            {selectedMembers.length > 0 && (
+                                <div className="bg-purple-800 p-2 rounded mb-4 flex justify-between items-center">
+                                    <span className="text-sm font-medium">{selectedMembers.length} member(s) selected</span>
+                                </div>
+                            )}
                             <p className="text-sm text-gray-400 mt-4">
-                                Drag members to assign them to tiers
+                                Drag members to assign them to tiers or select multiple for bulk assignment
                             </p>
                             <p className="text-xs text-gray-500 mt-2">
                                 CSV format: name,avatar (optional)
@@ -400,6 +575,7 @@ const TaskAssignmentTool = () => {
                                 const currentGP = calculateTierGP(tierId);
                                 const percentage = (currentGP / config.maxGP) * 100;
                                 const isOverBudget = currentGP > config.maxGP;
+                                const memberCount = assignments[tierId] ? Object.keys(assignments[tierId]).length : 0;
 
                                 return (
                                     <div
@@ -451,6 +627,30 @@ const TaskAssignmentTool = () => {
                                                     }[tierId]
                                                 }}
                                             />
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex gap-2 mb-3">
+                                            {/* Bulk Assignment Button */}
+                                            {selectedMembers.length > 0 && (
+                                                <button
+                                                    onClick={() => startBulkAssignment(tierId)}
+                                                    className="flex-1 bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm font-medium transition-colors"
+                                                >
+                                                    Assign {selectedMembers.length} member(s)
+                                                </button>
+                                            )}
+
+                                            {/* Clear Tier Button - only show if there are assignments */}
+                                            {memberCount > 0 && (
+                                                <button
+                                                    onClick={() => clearTierAssignments(tierId)}
+                                                    className="flex-1 bg-red-600 hover:bg-red-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-1"
+                                                >
+                                                    <Trash2 size={14} />
+                                                    Clear Tier ({memberCount})
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* Show member count when collapsed */}
@@ -671,6 +871,77 @@ const TaskAssignmentTool = () => {
                             </div>
                             <button
                                 onClick={() => setEditingMember(null)}
+                                className="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Bulk Assignment Modal */}
+                {showBulkModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 max-w-md w-full mx-4">
+                            <h3 className="text-xl font-semibold mb-4">
+                                Bulk Assign {selectedMembers.length} Member(s) to Tier {bulkAssignTier}
+                            </h3>
+                            <div className="bg-purple-800 p-3 rounded mb-4">
+                                <p className="text-sm">Selected Members:</p>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {selectedMembers.slice(0, 5).map(member => (
+                                        <span key={member.id} className="bg-purple-700 rounded px-2 py-1 text-xs">
+                                            {member.avatar} {member.name}
+                                        </span>
+                                    ))}
+                                    {selectedMembers.length > 5 && (
+                                        <span className="bg-purple-700 rounded px-2 py-1 text-xs">
+                                            +{selectedMembers.length - 5} more
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="bg-gray-700 p-3 rounded mb-4">
+                                <p className="text-sm text-gray-400 mb-1">
+                                    Liberation: <span className="text-white font-semibold">1 time (default)</span>
+                                </p>
+                                <p className="text-sm text-purple-400">
+                                    Cost: {tierConfig[bulkAssignTier].liberation} GP × {selectedMembers.length} members
+                                </p>
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium mb-2">
+                                    Enhancement Count:
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[0, 1, 2, 3, 4, 5].map(count => {
+                                        const libGP = tierConfig[bulkAssignTier].liberation;
+                                        const enhGP = count * tierConfig[bulkAssignTier].enhancement;
+                                        const totalGP = libGP + enhGP;
+                                        const totalForAllMembers = totalGP * selectedMembers.length;
+                                        return (
+                                            <button
+                                                key={count}
+                                                onClick={() => handleBulkAssign(count)}
+                                                className="bg-purple-600 hover:bg-purple-700 p-3 rounded text-center transition-colors"
+                                            >
+                                                <div className="font-semibold text-lg mb-1">{count}</div>
+                                                <div className="text-xs space-y-1">
+                                                    <div className="text-purple-200">Per member: {totalGP.toLocaleString()}</div>
+                                                    <div className="text-white font-semibold border-t border-purple-500 pt-1">
+                                                        Total: {totalForAllMembers.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setShowBulkModal(false);
+                                    setBulkAssignTier(null);
+                                }}
                                 className="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded transition-colors"
                             >
                                 Cancel
