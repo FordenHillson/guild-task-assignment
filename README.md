@@ -10,7 +10,11 @@ A web app for assigning guild members to each Tier with automatic GP calculation
 - Drag and drop members to assign them to different Tiers
 - Set the number of Enhancements per member
 - Automatic GP calculation and total display
+- Bulk selection and assignment of multiple members at once
+- Auto-assign algorithm to automatically distribute members across tiers
 - Export assignment report as a CSV file
+- Import assignments from previously exported CSV files
+- One-click clearing of tier assignments
 
 ## Getting Started
 
@@ -53,6 +57,22 @@ Mike,👨
 Sarah,👱
 Tom,🧔
 ```
+
+## Using the Tool
+
+### Basic Usage
+
+1. Upload or add members to the left panel
+2. Select members by clicking on them
+3. Either drag a member to a tier or use the bulk assignment feature
+4. Adjust enhancement levels as needed
+
+### Advanced Features
+
+- **Auto-Assign**: Click "Assign Auto" to automatically distribute members across all tiers
+- **Import/Export**: Export your assignments to a CSV file, make changes, and import them back
+- **Bulk Assignment**: Select multiple members using checkboxes, then assign them all to a tier at once
+- **Clear Tier**: Remove all assignments from a specific tier with the "Clear Tier" button
 
 ## Customization
 
