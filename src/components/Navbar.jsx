@@ -36,8 +36,7 @@ const Navbar = () => {
             >
               <Home size={18} />
               <span>Home</span>
-            </Link>
-            <Link 
+            </Link>            <Link 
               to="/about" 
               className={`flex items-center gap-1 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors ${
                 isActive('/about') ? 'bg-gray-700 text-white' : 'text-gray-300'
@@ -45,7 +44,7 @@ const Navbar = () => {
             >
               <Info size={18} />
               <span>About</span>
-            </Link>
+            </Link>            
           </div>
 
           {/* Mobile menu button */}
@@ -86,6 +85,12 @@ const Navbar = () => {
                 <span>About</span>
               </div>
             </Link>
+            <div className="px-4 py-2 mt-1">
+              <RestartTutorialButton 
+                className="w-full justify-center" 
+                onRestart={() => setMobileMenuOpen(false)}
+              />
+            </div>
           </div>
         )}
       </div>

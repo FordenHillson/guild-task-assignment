@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Users, Upload, Trash2, FileText, TrendingUp, Loader } from 'lucide-react';
+import SearchBar from './SearchBar';
 
 const MemberList = ({ 
   members, 
@@ -15,17 +16,32 @@ const MemberList = ({
   handleDragStart,
   isLoading
 }) => {
-  return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-      <div className="flex items-center justify-between mb-4">
+  const [draggingMemberId, setDraggingMemberId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const filteredMembers = useMemo(() => {
+    if (!searchTerm.trim()) return members;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return members.filter(member => 
+      member.name.toLowerCase().includes(searchLower)
+    );
+  }, [members, searchTerm]);  return (
+    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 member-list">      <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <Users className="text-blue-400" />
           Guild Members
         </h2>
         <span className="text-sm text-gray-400">
-          ({members.length} members)
+          ({filteredMembers.length}/{members.length} members)
         </span>
-      </div>      {/* Member Management Buttons */}
+      </div>
+      
+      <SearchBar 
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        onClear={() => setSearchTerm('')}
+      />{/* Member Management Buttons */}
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -75,17 +91,14 @@ const MemberList = ({
       >
         <FileText size={16} />
         Download Sample CSV
-      </button>
-
-      <button
+      </button>      <button
         onClick={startAutoAssignment}
-        className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4"
+        className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4 auto-assign-button"
       >
         <TrendingUp size={16} />
         Assign Auto
       </button>
-      
-      {/* Members List */}
+        {/* Members List */}
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {members.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
@@ -93,17 +106,30 @@ const MemberList = ({
             <p>No members yet</p>
             <p className="text-sm">Upload a CSV to add members</p>
           </div>
+        ) : filteredMembers.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">
+            <Search size={48} className="mx-auto mb-2 opacity-50" />
+            <p>No members found matching "{searchTerm}"</p>
+            <p className="text-sm">Try a different search term</p>
+          </div>
         ) : (
-          members.map(member => {
+          filteredMembers.map(member => {
             const { totalGP } = calculateMemberGP(member.id);
             const isSelected = selectedMembers.some(m => m.id === member.id);
-            return (
-              <div
+            return (              <div
                 key={member.id}
                 draggable
-                onDragStart={(e) => handleDragStart(e, member)}
+                onDragStart={(e) => {
+                  handleDragStart(e, member);
+                  setDraggingMemberId(member.id);
+                }}
+                onDragEnd={() => setDraggingMemberId(null)}
                 onClick={(e) => toggleMemberSelection(member, e)}
-                className={`bg-gray-700 p-3 rounded cursor-pointer hover:bg-gray-600 transition-colors border ${isSelected ? 'border-purple-500' : 'border-gray-600'}`}
+                className={`bg-gray-700 p-3 rounded cursor-pointer hover:bg-gray-600 transition-colors border 
+                  ${isSelected ? 'border-purple-500' : 'border-gray-600'}
+                  ${draggingMemberId === member.id ? 'opacity-50' : ''}
+                  ${draggingMemberId === member.id ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}
+                `}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

@@ -1,5 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
+import mockToast, { useCustomToast } from './components/CustomToast';
+
+// Try to import react-hot-toast, but use our mock if it fails
+let toast;
+try {
+  toast = require('react-hot-toast').default;
+} catch (e) {
+  console.warn("Could not load react-hot-toast, using fallback toast");
+  toast = mockToast;
+}
 
 // Components
 import MemberList from './components/MemberList';
@@ -8,9 +18,11 @@ import MemberSummary from './components/MemberSummary';
 import AssignmentModal from './components/AssignmentModal';
 import EditEnhancementModal from './components/EditEnhancementModal';
 import BulkAssignModal from './components/BulkAssignModal';
+import MemberStats from './components/MemberStats';
 
 // Utils
 import { assignAuto, exportAssignments, importAssignments, generateSampleCSV } from './utils/assignmentUtils';
+import { saveToStorage, loadFromStorage, STORAGE_KEYS } from './utils/storageUtils';
 
 const TaskAssignmentTool = () => {
     // Tier configuration
@@ -20,26 +32,34 @@ const TaskAssignmentTool = () => {
         3: { maxGP: 62500, liberation: 2500, enhancement: 5000, color: 'yellow' },
         4: { maxGP: 136500, liberation: 3500, enhancement: 7000, color: 'orange' },
         5: { maxGP: 200000, liberation: 5000, enhancement: 10000, color: 'red' }
-    };
-
-    // Initial sample members
-    const [members, setMembers] = useState([
+    };    // Sample members for new users
+    const sampleMembers = [
         { id: 1, name: 'Alice', avatar: '👤' },
         { id: 2, name: 'Bob', avatar: '👨' },
         { id: 3, name: 'Charlie', avatar: '👩' },
         { id: 4, name: 'David', avatar: '🧑' },
         { id: 5, name: 'Eve', avatar: '👱' }
-    ]);
+    ];
+    
+    // Initialize state from localStorage or use defaults
+    const [members, setMembers] = useState(() => 
+        loadFromStorage(STORAGE_KEYS.MEMBERS, sampleMembers)
+    );
 
     // Track assignments: { tierId: { memberId: { liberation: 1, enhancement: count } } }
-    const [assignments, setAssignments] = useState({});
+    const [assignments, setAssignments] = useState(() =>
+        loadFromStorage(STORAGE_KEYS.ASSIGNMENTS, {})
+    );
+    
     const [draggedMember, setDraggedMember] = useState(null);
     const [selectedTier, setSelectedTier] = useState(null);
     const [selectedMember, setSelectedMember] = useState(null);
-    const [collapsedTiers, setCollapsedTiers] = useState({});
+    const [collapsedTiers, setCollapsedTiers] = useState(() =>
+        loadFromStorage(STORAGE_KEYS.COLLAPSED_TIERS, {})
+    );
     const [editingMember, setEditingMember] = useState(null); // { tierId, member }
     const fileInputRef = useRef(null);
-    const importFileInputRef = useRef(null);
+    const importFileInputRef = useRef(null);    
     
     // Loading states
     const [isLoading, setIsLoading] = useState(false);
@@ -100,9 +120,7 @@ const TaskAssignmentTool = () => {
                 return [...prev, member];
             }
         });
-    };
-
-    // Handle bulk assignment
+    };    // Handle bulk assignment
     const handleBulkAssign = (enhancementCount) => {
         if (!bulkAssignTier || selectedMembers.length === 0) return;
 
@@ -122,12 +140,12 @@ const TaskAssignmentTool = () => {
         setBulkAssignTier(null);
         setShowBulkModal(false);
         setSelectedMembers([]);
-    };
-
-    // Start bulk assignment process
+        
+        toast.success(`Assigned ${selectedMembers.length} members to Tier ${bulkAssignTier} with ${enhancementCount} enhancements`);
+    };// Start bulk assignment process
     const startBulkAssignment = (tierId) => {
         if (selectedMembers.length === 0) {
-            alert("Please select members first");
+            toast.error("Please select members first");
             return;
         }
 
@@ -148,6 +166,8 @@ const TaskAssignmentTool = () => {
         const file = event.target.files[0];
         if (file) {
             setIsLoading(true);
+            const loadingToast = toast.loading('Uploading members...');
+            
             Papa.parse(file, {
                 header: true,
                 complete: (results) => {
@@ -161,27 +181,42 @@ const TaskAssignmentTool = () => {
 
                     if (newMembers.length > 0) {
                         setMembers(prevMembers => [...prevMembers, ...newMembers]);
-                        // Show success toast or notification
-                        alert(`Successfully added ${newMembers.length} members!`);
+                        // Show success toast
+                        toast.success(`Successfully added ${newMembers.length} members!`, { id: loadingToast });
+                    } else {
+                        toast.error('No valid members found in the CSV file', { id: loadingToast });
                     }
                     setIsLoading(false);
                 },
                 error: (error) => {
                     console.error('CSV parsing error:', error);
-                    alert('Error parsing CSV file. Please check the format.');
+                    toast.error('Error parsing CSV file. Please check the format.', { id: loadingToast });
                     setIsLoading(false);
                 }
             });
         }
         // Reset file input
         event.target.value = '';
-    };
-
-    // Clear all members
+    };    // Clear all members
     const clearMembers = () => {
         if (window.confirm('Are you sure you want to clear all members? This will also clear all assignments.')) {
             setMembers([]);
             setAssignments({});
+            toast.success('All members and assignments cleared!');
+        }
+    };
+    
+    // Reset all data to default state
+    const resetAllData = () => {
+        if (window.confirm('Are you sure you want to reset all data? This will clear all members, assignments, and settings.')) {
+            setMembers(sampleMembers);
+            setAssignments({});
+            setCollapsedTiers({});
+            // Clear localStorage
+            Object.values(STORAGE_KEYS).forEach(key => {
+                localStorage.removeItem(key);
+            });
+            toast.success('All data has been reset to default!');
         }
     };
 
@@ -272,39 +307,44 @@ const TaskAssignmentTool = () => {
         if (file) {
             if (window.confirm('Importing assignments will replace all current assignments. Continue?')) {
                 setIsImporting(true);
-                
-                // We need to modify the importAssignments to accept a callback
-                const onComplete = () => {
-                    setIsImporting(false);
-                    alert('Assignments imported successfully!');
-                };
-                
-                const onError = (error) => {
-                    setIsImporting(false);
-                    alert(`Error importing assignments: ${error.message}`);
-                };
+                const loadingToast = toast.loading('Importing assignments...');
                 
                 try {
                     importAssignments(file, members, tierConfig, setAssignments);
-                    onComplete();
+                    setIsImporting(false);
+                    toast.success('Assignments imported successfully!', { id: loadingToast });
                 } catch (error) {
-                    onError(error);
+                    setIsImporting(false);
+                    toast.error(`Error importing assignments: ${error.message || 'Unknown error'}`, { id: loadingToast });
                 }
             }
         }
         // Reset file input
         event.target.value = '';
-    };return (
+    };
+
+    // Save data to localStorage whenever it changes
+    useEffect(() => {
+        saveToStorage(STORAGE_KEYS.MEMBERS, members);
+    }, [members]);
+
+    useEffect(() => {
+        saveToStorage(STORAGE_KEYS.ASSIGNMENTS, assignments);
+    }, [assignments]);
+
+    useEffect(() => {
+        saveToStorage(STORAGE_KEYS.COLLAPSED_TIERS, collapsedTiers);
+    }, [collapsedTiers]);    return (
         <div className="min-h-screen bg-gray-900 text-white p-6 pt-4">
-            <div className="max-w-7xl mx-auto">
-                <header className="mb-6">
+            <div className="max-w-7xl mx-auto">                
+                  <header className="mb-6">
                     <h2 className="text-2xl font-bold mb-2">Guild Task Assignment Tool</h2>                    
                     <p className="text-gray-400">Assign members to tiers and manage GP allocation</p>
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Panel - Members */}
-                    <div className="lg:col-span-1">                        <MemberList
+                    <div className="lg:col-span-1 member-list">                        <MemberList
                             members={members}
                             selectedMembers={selectedMembers}
                             fileInputRef={fileInputRef}
@@ -328,7 +368,7 @@ const TaskAssignmentTool = () => {
                     </div>
 
                     {/* Middle Panel - Tiers */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 tier-list">
                         <TierList
                             tierConfig={tierConfig}
                             assignments={assignments}
@@ -344,10 +384,9 @@ const TaskAssignmentTool = () => {
                             setEditingMember={setEditingMember}
                             removeAssignment={removeAssignment}
                         />
-                    </div>
-
-                    {/* Right Panel - Summary */}
-                    <div className="lg:col-span-1">                        <MemberSummary
+                    </div>                    {/* Right Panel - Summary */}
+                    <div className="lg:col-span-1">
+                        <MemberSummary
                             members={members}
                             calculateMemberGP={calculateMemberGP}
                             exportAssignments={exportAssignments}
@@ -355,6 +394,12 @@ const TaskAssignmentTool = () => {
                             assignments={assignments}
                             tierConfig={tierConfig}
                             isImporting={isImporting}
+                        />
+                        <MemberStats
+                            members={members}
+                            assignments={assignments}
+                            tierConfig={tierConfig}
+                            calculateMemberGP={calculateMemberGP}
                         />
                         <input
                             ref={importFileInputRef}
@@ -395,7 +440,14 @@ const TaskAssignmentTool = () => {
                         setShowBulkModal(false);
                         setBulkAssignTier(null);
                     }}
-                />
+                />                
+                {/* Debugging - Remove in production */}
+                {/* <div className="mt-6 p-4 bg-gray-800 rounded">
+                    <h3 className="text-lg font-semibold mb-2">Debug Info</h3>
+                    <pre className="text-sm whitespace-pre-wrap">
+                        {JSON.stringify({ members, assignments, collapsedTiers }, null, 2)}
+                    </pre>
+                </div> */}
             </div>
         </div>
     );

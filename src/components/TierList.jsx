@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Activity, AlertCircle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import DragOverlay from './DragOverlay';
 
 const TierList = ({
   tierConfig,
@@ -16,21 +17,28 @@ const TierList = ({
   setEditingMember,
   removeAssignment
 }) => {
-  return (
-    <div className="space-y-4">
+  const [dragOverTierId, setDragOverTierId] = useState(null);  return (
+    <div className="space-y-4 tier-list">
       {Object.entries(tierConfig).map(([tierId, config]) => {
         const currentGP = calculateTierGP(tierId);
         const percentage = (currentGP / config.maxGP) * 100;
         const isOverBudget = currentGP > config.maxGP;
         const memberCount = assignments[tierId] ? Object.keys(assignments[tierId]).length : 0;
 
-        return (
-          <div
+        return (          <div
             key={tierId}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, tierId)}
-            className="bg-gray-800 rounded-lg p-4 border-2 border-gray-700 hover:border-gray-600 transition-colors"
+            onDragOver={(e) => {
+              handleDragOver(e);
+              setDragOverTierId(tierId);
+            }}
+            onDragLeave={() => setDragOverTierId(null)}
+            onDrop={(e) => {
+              handleDrop(e, tierId);
+              setDragOverTierId(null);
+            }}
+            className="bg-gray-800 rounded-lg p-4 border-2 border-gray-700 hover:border-gray-600 transition-colors relative"
           >
+            <DragOverlay visible={dragOverTierId === tierId} type="tier" />
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Activity
