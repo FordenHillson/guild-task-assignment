@@ -18,7 +18,7 @@ A web app for assigning guild members to each Tier with automatic GP calculation
 ### 1. Clone the project
 
 ```sh
-git clone https://github.com/your-username/guild-task-assignment.git
+git clone https://github.com/FordenHillson/guild-task-assignment.git
 cd guild-task-assignment
 ```
 
