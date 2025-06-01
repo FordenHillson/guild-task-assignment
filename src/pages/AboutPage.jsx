@@ -7,7 +7,7 @@ return (
             <h1 className="text-4xl font-bold mb-6">About Me</h1>
             
             <div className="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg">                <img 
-                    src="./image/0.png" 
+                    src="/image/0.png" 
                     alt="Profile" 
                     className="mx-auto mb-4 p-2 w-32 h-32 rounded-full bg-gray-700 object-cover"
                 />
