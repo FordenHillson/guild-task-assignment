@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, FileText, Upload } from 'lucide-react';
+import { TrendingUp, FileText, Upload, Loader } from 'lucide-react';
 
 const MemberSummary = ({
   members,
@@ -7,7 +7,8 @@ const MemberSummary = ({
   exportAssignments,
   importFileInputRef,
   assignments,
-  tierConfig
+  tierConfig,
+  isImporting
 }) => {
   return (
     <>
@@ -47,22 +48,31 @@ const MemberSummary = ({
           })}
         </div>
       </div>
-      
-      {/* Export and Import Buttons */}
+        {/* Export and Import Buttons */}
       <div className="flex gap-2 mt-4">
         <button
           onClick={() => exportAssignments(members, assignments, tierConfig)}
-          className="flex-1 bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          disabled={isImporting || Object.keys(assignments).length === 0}
+          className={`flex-1 bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+            isImporting || Object.keys(assignments).length === 0 ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
         >
           <FileText size={16} />
           Export Report
         </button>
         <button
           onClick={() => importFileInputRef.current?.click()}
-          className="flex-1 bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          disabled={isImporting}
+          className={`flex-1 bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+            isImporting ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
         >
-          <Upload size={16} />
-          Import Assignments
+          {isImporting ? (
+            <Loader size={16} className="animate-spin" />
+          ) : (
+            <Upload size={16} />
+          )}
+          {isImporting ? 'Importing...' : 'Import Assignments'}
         </button>
       </div>
     </>

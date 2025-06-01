@@ -40,6 +40,10 @@ const TaskAssignmentTool = () => {
     const [editingMember, setEditingMember] = useState(null); // { tierId, member }
     const fileInputRef = useRef(null);
     const importFileInputRef = useRef(null);
+    
+    // Loading states
+    const [isLoading, setIsLoading] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
 
     // Add state for multi-select functionality
     const [selectedMembers, setSelectedMembers] = useState([]);
@@ -139,12 +143,11 @@ const TaskAssignmentTool = () => {
     // Deselect all members
     const clearSelectedMembers = () => {
         setSelectedMembers([]);
-    };
-
-    // Handle CSV upload
+    };    // Handle CSV upload
     const handleCSVUpload = (event) => {
         const file = event.target.files[0];
         if (file) {
+            setIsLoading(true);
             Papa.parse(file, {
                 header: true,
                 complete: (results) => {
@@ -158,11 +161,15 @@ const TaskAssignmentTool = () => {
 
                     if (newMembers.length > 0) {
                         setMembers(prevMembers => [...prevMembers, ...newMembers]);
+                        // Show success toast or notification
+                        alert(`Successfully added ${newMembers.length} members!`);
                     }
+                    setIsLoading(false);
                 },
                 error: (error) => {
                     console.error('CSV parsing error:', error);
                     alert('Error parsing CSV file. Please check the format.');
+                    setIsLoading(false);
                 }
             });
         }
@@ -259,37 +266,45 @@ const TaskAssignmentTool = () => {
             ...prev,
             [tierId]: !prev[tierId]
         }));
-    };
-
-    // Handle import assignments
+    };    // Handle import assignments
     const handleImportAssignments = (event) => {
         const file = event.target.files[0];
         if (file) {
             if (window.confirm('Importing assignments will replace all current assignments. Continue?')) {
-                importAssignments(file, members, tierConfig, setAssignments);
+                setIsImporting(true);
+                
+                // We need to modify the importAssignments to accept a callback
+                const onComplete = () => {
+                    setIsImporting(false);
+                    alert('Assignments imported successfully!');
+                };
+                
+                const onError = (error) => {
+                    setIsImporting(false);
+                    alert(`Error importing assignments: ${error.message}`);
+                };
+                
+                try {
+                    importAssignments(file, members, tierConfig, setAssignments);
+                    onComplete();
+                } catch (error) {
+                    onError(error);
+                }
             }
         }
         // Reset file input
         event.target.value = '';
-    };
-
-    return (
-        <div className="min-h-screen bg-gray-900 text-white p-6">
+    };return (
+        <div className="min-h-screen bg-gray-900 text-white p-6 pt-4">
             <div className="max-w-7xl mx-auto">
-                <header className="mb-8">
-                    <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-                        <img src="https://www.lotkeys.com/uploads/urunler/maplestorymlogolotkeys-yMU3.png.webp" 
-                        alt="MapleStory M Logo" 
-                        className="h-8 inline-block" />
-                        Guild Task Assignment Tool For MapleStory M
-                    </h1>                    
+                <header className="mb-6">
+                    <h2 className="text-2xl font-bold mb-2">Guild Task Assignment Tool</h2>                    
                     <p className="text-gray-400">Assign members to tiers and manage GP allocation</p>
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Panel - Members */}
-                    <div className="lg:col-span-1">
-                        <MemberList
+                    <div className="lg:col-span-1">                        <MemberList
                             members={members}
                             selectedMembers={selectedMembers}
                             fileInputRef={fileInputRef}
@@ -301,6 +316,7 @@ const TaskAssignmentTool = () => {
                             startAutoAssignment={startAutoAssignment}
                             clearMembers={clearMembers}
                             handleDragStart={handleDragStart}
+                            isLoading={isLoading}
                         />
                         <input
                             ref={fileInputRef}
@@ -331,14 +347,14 @@ const TaskAssignmentTool = () => {
                     </div>
 
                     {/* Right Panel - Summary */}
-                    <div className="lg:col-span-1">
-                        <MemberSummary
+                    <div className="lg:col-span-1">                        <MemberSummary
                             members={members}
                             calculateMemberGP={calculateMemberGP}
                             exportAssignments={exportAssignments}
                             importFileInputRef={importFileInputRef}
                             assignments={assignments}
                             tierConfig={tierConfig}
+                            isImporting={isImporting}
                         />
                         <input
                             ref={importFileInputRef}

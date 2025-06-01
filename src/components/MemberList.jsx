@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Upload, Trash2, FileText, TrendingUp } from 'lucide-react';
+import { Users, Upload, Trash2, FileText, TrendingUp, Loader } from 'lucide-react';
 
 const MemberList = ({ 
   members, 
@@ -12,7 +12,8 @@ const MemberList = ({
   generateSampleCSV,
   startAutoAssignment,
   clearMembers,
-  handleDragStart
+  handleDragStart,
+  isLoading
 }) => {
   return (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -24,20 +25,28 @@ const MemberList = ({
         <span className="text-sm text-gray-400">
           ({members.length} members)
         </span>
-      </div>
-
-      {/* Member Management Buttons */}
+      </div>      {/* Member Management Buttons */}
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex-1 bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          disabled={isLoading}
+          className={`flex-1 bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+            isLoading ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
         >
-          <Upload size={16} />
-          Upload CSV
+          {isLoading ? (
+            <Loader size={16} className="animate-spin" />
+          ) : (
+            <Upload size={16} />
+          )}
+          {isLoading ? 'Uploading...' : 'Upload CSV'}
         </button>
         <button
           onClick={clearMembers}
-          className="flex-1 bg-red-600 hover:bg-red-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          disabled={isLoading || members.length === 0}
+          className={`flex-1 bg-red-600 hover:bg-red-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+            isLoading || members.length === 0 ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
         >
           <Trash2 size={16} />
           Clear All

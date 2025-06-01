@@ -13,5 +13,8 @@ export default defineConfig({
         manualChunks: undefined // Avoids potential chunk loading issues on GitHub Pages
       }
     }
+  },
+  server: {
+    historyApiFallback: true, // For SPA routing
   }
 })
