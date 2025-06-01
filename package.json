@@ -1,6 +1,6 @@
 {
   "name": "guild-task-assignment",
-  "private": true,
+  "homepage": "https://fordenhillson.github.io/guild-task-assignment/",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -8,9 +8,12 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tailwind-init": "tailwindcss init -p"
+    "tailwind-init": "tailwindcss init -p",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "gh-pages": "^6.3.0",
     "lucide-react": "^0.511.0",
     "papaparse": "^5.5.3",
     "react": "^19.1.0",
