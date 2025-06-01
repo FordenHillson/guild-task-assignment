@@ -84,6 +84,48 @@ Tom,🧔
 - Node.js version 18 or higher
 - npm
 
+## Deployment on GitHub Pages
+
+1. Build the project
+```sh
+npm run build
+```
+
+2. Create or update the `deploy.sh` script in your project root:
+```sh
+#!/usr/bin/env sh
+
+# abort on errors
+set -e
+
+# build
+npm run build
+
+# navigate into the build output directory
+cd dist
+
+# if you are deploying to a custom domain
+# echo 'www.example.com' > CNAME
+
+git init
+git checkout -b main
+git add -A
+git commit -m 'deploy'
+
+# if you are deploying to https://<USERNAME>.github.io/<REPO>
+git push -f git@github.com:FordenHillson/guild-task-assignment.git main:gh-pages
+
+cd -
+```
+
+3. Make the script executable and run it:
+```sh
+chmod +x deploy.sh
+./deploy.sh
+```
+
+4. Your app will be available at https://fordenhillson.github.io/guild-task-assignment/
+
 ## License
 
 MIT
