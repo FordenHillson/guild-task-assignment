@@ -169,6 +169,49 @@ const exportAssignments = (members, assignments, tierConfig) => {
     URL.revokeObjectURL(url);
 };
 
+// Add import function to handle importing assignments from CSV
+const importAssignments = (file, members, tierConfig, setAssignments) => {
+    Papa.parse(file, {
+        header: true,
+        complete: (results) => {
+            const newAssignments = {};
+            
+            // Group rows by tier
+            results.data.forEach(row => {
+                if (!row.Tier && !row.tier) return; // Skip invalid rows
+                
+                const tierId = row.Tier || row.tier;
+                const memberName = row.Name || row.name;
+                const liberation = parseInt(row.Liberation || row.liberation) || 1;
+                const enhancement = parseInt(row.Enhancement || row.enhancement) || 0;
+                
+                // Find the member by name
+                const member = members.find(m => m.name === memberName);
+                if (!member) {
+                    console.warn(`Member ${memberName} not found. Skipping assignment.`);
+                    return;
+                }
+                
+                // Initialize tier if needed
+                if (!newAssignments[tierId]) {
+                    newAssignments[tierId] = {};
+                }
+                
+                // Add assignment
+                newAssignments[tierId][member.id] = {
+                    liberation,
+                    enhancement
+                };
+            });
+            
+            setAssignments(newAssignments);
+        },
+        error: (error) => {
+            console.error('CSV parsing error:', error);
+            alert('Error parsing CSV file. Please check the format.');
+        }
+    });
+};
 
 const TaskAssignmentTool = () => {
     // Tier configuration
@@ -197,6 +240,8 @@ const TaskAssignmentTool = () => {
     const [collapsedTiers, setCollapsedTiers] = useState({});
     const [editingMember, setEditingMember] = useState(null); // { tierId, member }
     const fileInputRef = useRef(null);
+    // Add reference for import assignment file input
+    const importFileInputRef = useRef(null);
 
     // Add state for multi-select functionality
     const [selectedMembers, setSelectedMembers] = useState([]);
@@ -430,14 +475,28 @@ const TaskAssignmentTool = () => {
         URL.revokeObjectURL(url);
     };
 
+    // Handle import assignments
+    const handleImportAssignments = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            if (window.confirm('Importing assignments will replace all current assignments. Continue?')) {
+                importAssignments(file, members, tierConfig, setAssignments);
+            }
+        }
+        // Reset file input
+        event.target.value = '';
+    };
+
     return (
         <div className="min-h-screen bg-gray-900 text-white p-6">
             <div className="max-w-7xl mx-auto">
                 <header className="mb-8">
                     <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-                        <Target className="text-purple-400" />
-                        Guild Task Assignment Tool
-                    </h1>
+                        <img src="https://www.lotkeys.com/uploads/urunler/maplestorymlogolotkeys-yMU3.png.webp" 
+                        alt="MapleStory M Logo" 
+                        className="h-8 inline-block" />
+                        Guild Task Assignment Tool For MapleStory M
+                    </h1>                    
                     <p className="text-gray-400">Assign members to tiers and manage GP allocation</p>
                 </header>
 
@@ -719,12 +778,12 @@ const TaskAssignmentTool = () => {
 
                     {/* Right Panel - Summary */}
                     <div className="lg:col-span-1">
-                        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 flex flex-col h-[calc(100vh-12rem)]">
                             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                                 <TrendingUp className="text-green-400" />
                                 Member Summary
                             </h2>
-                            <div className="space-y-4 max-h-96 overflow-y-auto">
+                            <div className="space-y-4 overflow-y-auto flex-1">
                                 {members.map(member => {
                                     const { totalGP, tasks } = calculateMemberGP(member.id);
                                     if (tasks.length === 0) return null;
@@ -755,13 +814,31 @@ const TaskAssignmentTool = () => {
                                 })}
                             </div>
                         </div>
-                        <button
-                            onClick={() => exportAssignments(members, assignments, tierConfig)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 mb-4 mt-4"
-                        >
-                            <FileText size={16} />
-                            Export Assignment Report
-                        </button>
+                        {/* Export and Import Buttons */}
+                        <div className="flex gap-2 mt-4">
+                            <button
+                                onClick={() => exportAssignments(members, assignments, tierConfig)}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                                <FileText size={16} />
+                                Export Report
+                            </button>
+                            <button
+                                onClick={() => importFileInputRef.current?.click()}
+                                className="flex-1 bg-purple-600 hover:bg-purple-700 p-2 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Upload size={16} />
+                                Import Assignments
+                            </button>
+                        </div>
+                        {/* Hidden input for import */}
+                        <input
+                            ref={importFileInputRef}
+                            type="file"
+                            accept=".csv"
+                            onChange={handleImportAssignments}
+                            className="hidden"
+                        />
                     </div>
 
                 </div>
